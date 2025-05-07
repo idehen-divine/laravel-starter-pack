@@ -49,7 +49,7 @@ This **Laravel API Starter Pack** is built for clean, scalable API development u
 
 ```bash
 # 1. Clone the repository
-git clone https::/github.com/idehen-divine/laravel-starter-pack.git
+git clone https://github.com/idehen-divine/laravel-starter-pack.git
 
 # 2. Navigate into the project
 cd laravel-starter-pack
