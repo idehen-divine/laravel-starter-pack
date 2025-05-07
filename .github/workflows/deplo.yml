@@ -1,0 +1,134 @@
+name: Deploy Laravel App [All Environments]
+
+on:
+  push:
+    branches:
+      - master
+      - staging
+      - development
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: shivammathur/setup-php@v2
+      with:
+          php-version: '8.2'
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Determine Environment
+      id: env
+      run: |
+        echo "db_host=127.0.0.1" >> $GITHUB_ENV
+        if [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
+          echo "env=live" >> $GITHUB_ENV
+          echo "folder=Damodi-BE/production" >> $GITHUB_ENV
+          echo "url=https://prod.damodi.io" >> $GITHUB_ENV
+          echo "db_database=${{ secrets.DB_DATABASE_PRODUCTION }}" >> $GITHUB_ENV
+          echo "db_username=${{ secrets.DB_USERNAME_PRODUCTION }}" >> $GITHUB_ENV
+          echo "db_password=${{ secrets.DB_PASSWORD_PRODUCTION }}" >> $GITHUB_ENV
+        elif [[ "${{ github.ref }}" == "refs/heads/staging" ]]; then
+          echo "env=staging" >> $GITHUB_ENV
+          echo "folder=Damodi-BE/staging" >> $GITHUB_ENV
+          echo "url=https://stage.damodi.io" >> $GITHUB_ENV
+          echo "db_database=${{ secrets.DB_DATABASE_STAGING }}" >> $GITHUB_ENV
+          echo "db_username=${{ secrets.DB_USERNAME_STAGING }}" >> $GITHUB_ENV
+          echo "db_password=${{ secrets.DB_PASSWORD_STAGING }}" >> $GITHUB_ENV
+        elif [[ "${{ github.ref }}" == "refs/heads/development" ]]; then
+          echo "env=development" >> $GITHUB_ENV
+          echo "folder=Damodi-BE/development" >> $GITHUB_ENV
+          echo "url=https://dev.damodi.io/" >> $GITHUB_ENV
+          echo "db_database=${{ secrets.DB_DATABASE_DEVELOPMENT }}" >> $GITHUB_ENV
+          echo "db_username=${{ secrets.DB_USERNAME_DEVELOPMENT }}" >> $GITHUB_ENV
+          echo "db_password=${{ secrets.DB_PASSWORD_DEVELOPMENT }}" >> $GITHUB_ENV
+        fi
+
+    - name: Setup SSH Key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H ${{ secrets.VPS_DOMAIN_HOST }} >> ~/.ssh/known_hosts
+
+    - name: 📂 Sync Files via rsync
+      run: |
+        rsync -avz --delete \
+        --exclude=".git" \
+        --exclude=".github" \
+        --exclude=".env" \
+        --exclude="vendor" \
+        --exclude=".scribe" \
+        --exclude="node_modules" \
+        --exclude="storage/logs" \
+        -e "ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa" ./ ${{ secrets.VPS_USERNAME }}@${{ secrets.VPS_DOMAIN_HOST }}:${{ env.folder }}
+
+    - name: Login and Run Artisan Commands
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+          host: ${{ secrets.VPS_DOMAIN_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+              # Change to Environment Directory
+              echo "Entering Environment Folder"
+              cd ./${{ env.folder }}/
+
+              # Check Environment File
+              php -r "file_exists('.env') || copy('.env.example', '.env');"
+
+              echo "Ensuring SQLite database exists..."
+              mkdir -p database
+              touch database/database.sqlite
+
+              echo "Updating .env file for SQLite..."
+              sed -i "s|^APP_URL=.*|APP_URL=${{ env.url }}|" .env
+              sed -i "s|^APP_ENV=.*|APP_ENV=${{ env.env }}|" .env
+              sed -i "s|^DB_CONNECTION=.*|DB_CONNECTION=sqlite|" .env
+              sed -i "s|^DB_DATABASE=.*|DB_DATABASE=$(pwd)/database/database.sqlite|" .env
+
+              # Update Environment variables for Database
+              # echo "Updating Environment Variables For Database"
+              # sed -i "s|^APP_URL=.*|APP_URL=$(echo "${{ env.url }}" | sed 's|[&]|\\&|g')|" .env
+              # sed -i "s|^APP_ENV=.*|APP_ENV=$(echo "${{ env.env }}" | sed 's|[&]|\\&|g')|" .env
+              # sed -i "s|^DB_HOST=.*|DB_HOST=$(echo "${{ env.db_host }}" | sed 's|[&]|\\&|g')|" .env
+              # sed -i "s|^DB_DATABASE=.*|DB_DATABASE=$(echo "${{ env.db_database }}" | sed 's|[&]|\\&|g')|" .env
+              # sed -i "s|^DB_USERNAME=.*|DB_USERNAME=$(echo "${{ env.db_username }}" | sed 's|[&]|\\&|g')|" .env
+              # sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=$(echo "${{ env.db_password }}" | sed 's|[&]|\\&|g')|" .env
+
+              # Install dependencies
+              echo "Installing Dependencies"
+              composer install --optimize-autoloader
+
+              # Update database tables
+              # echo "Migrate new database tables"
+              php artisan migrate:fresh --seed
+
+              # Clear and cache configurations
+              echo "Clear and cache configurations"
+              php artisan clear
+              php artisan optimize:clear
+
+              # Generate App Key
+              echo "Generating New App Key"
+              php artisan key:generate
+
+              # Regenerate Docs
+              echo "Regenerating Documentation"
+              php artisan scribe:generate
+
+              echo "Caching App..."
+              php artisan optimize
+
+              # Fix Permission
+              echo "Fixing Permissions"
+              sudo chown -R ubuntu:www-data /home/ubuntu/${{ env.folder }}
+              sudo chmod -R 775 /home/ubuntu/${{ env.folder }}
+
+              # Restart Services
+              echo "Restarting Services"
+              sudo systemctl restart nginx
+              sudo systemctl restart php8.3-fpm
+
+              echo "Deployment successful!"

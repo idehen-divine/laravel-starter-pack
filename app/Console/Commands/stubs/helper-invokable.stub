@@ -1,0 +1,18 @@
+<?php
+
+namespace App\Helpers;
+
+class {{ name }} extends {{ extends }}
+{
+
+    /**
+     * Example helper method
+     *
+     * @param mixed $value
+     * @return mixed
+     */
+    public function __invoke($value)
+    {
+        return $value;
+    }
+}

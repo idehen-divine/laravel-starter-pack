@@ -1,0 +1,41 @@
+<?php
+
+namespace App\Helpers;
+
+class Helper
+{
+    protected static $instance;
+    protected $helpers = [];
+    public static function make()
+    {
+        return new static();
+    }
+
+    public static function getInstance(): self
+    {
+        return self::$instance ??= new static();
+    }
+
+    public function __call($name, $arguments)
+    {
+        $class = 'App\\Helpers\\' . \Illuminate\Support\Str::studly($name);
+
+        if (!class_exists($class)) {
+            throw new \Exception("Helper class [$class] not found.");
+        }
+
+        if (!isset($this->helpers[$name])) {
+            $this->helpers[$name] = $class::make();
+        }
+
+        $instance = $this->helpers[$name];
+
+        // If arguments were passed and class is invokable, call it
+        if (!empty($arguments) && is_callable($instance)) {
+            return $instance(...$arguments); // calls __invoke()
+        }
+
+        return $instance;
+    }
+
+}

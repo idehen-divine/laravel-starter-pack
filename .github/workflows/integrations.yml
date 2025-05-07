@@ -1,0 +1,51 @@
+name: Test Laravel App [All Environments]
+
+on:
+  pull_request:
+    branches: [master, staging, development]
+    types: [opened, synchronize]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }} # Checkout the fork's branch
+          persist-credentials: false
+
+      - name: Set Up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer
+
+      - name: Install Dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Copy .env file
+        run: cp .env.example .env
+
+      - name: Set Up Environment Variables
+        run: |
+          php artisan key:generate
+          mkdir -p database
+          touch database/database.sqlite
+          sed -i "s/DB_CONNECTION=.*/DB_CONNECTION=sqlite/" .env
+          sed -i "s/DB_DATABASE=.*/DB_DATABASE=database\/database.sqlite/" .env
+
+      - name: Run Migrations
+        run: php artisan migrate --force
+
+      - name: Optimize App
+        run: php artisan optimize
+
+      - name: Add Unit Test Dir
+        run: mkdir -p tests/Unit
+
+      - name: Run Tests
+        run: php artisan test --env=testing
