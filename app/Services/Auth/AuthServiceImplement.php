@@ -55,6 +55,11 @@ class AuthServiceImplement extends ServiceApi implements AuthService
 					]);
 			}
 
+			if (!$user->hasVerifiedEmail()) {
+				return $this->setCode(403)
+					->setMessage("Verify email address.");
+			}
+
 			$user->tokens()->delete();
 
 			$token = $user->createToken('API Token')->plainTextToken;
@@ -104,10 +109,13 @@ class AuthServiceImplement extends ServiceApi implements AuthService
 					]);
 			}
 
-			// Revoke old tokens (optional)
+			if (!$user->hasVerifiedEmail()) {
+				return $this->setCode(403)
+					->setMessage("Verify email address.");
+			}
+			
 			$user->tokens()->delete();
-
-			// Generate Sanctum token
+			
 			$token = $user->createToken('API Token')->plainTextToken;
 
 			return $this->setCode(200)
@@ -355,7 +363,9 @@ class AuthServiceImplement extends ServiceApi implements AuthService
 
 			if (in_array($otpCode->type, [OTPTypeEnum::VERIFY_2FA_AUTHENTICATION_OTP->name, OTPTypeEnum::VERIFY_EMAIL_OTP->name])) {
 				$user = $this->userRepository->findUserByEmail($otpCode->email);
-				$user->update(['email_verified_at' => now()]);
+				if (!$user->hasVerifiedEmail()) {
+					$user->markEmailAsVerified();
+				}
 				$user->tokens()->delete();
 				$token = $user->createToken('API Token')->plainTextToken;
 				$this->otpCodeRepository->delete($otpCode->id);
