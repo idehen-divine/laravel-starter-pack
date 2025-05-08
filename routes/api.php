@@ -2,9 +2,10 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\TripController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\TripController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Middleware\EnsureEmailIsVerified;
 use App\Http\Controllers\Api\JourneyController;
 use App\Http\Controllers\Api\PassengerController;
 
@@ -27,6 +28,8 @@ Route::group(['prefix' => 'v1'], function () {
         Route::post('/admin/sign-in', [AuthController::class, 'adminLogin'])->name('admin.login');
     });
 
+
+Route::middleware(['auth:sanctum', EnsureEmailIsVerified::class])->group(function () {
     Route::prefix('users')->name('user')->group(function () {
         Route::get('/search', [UserController::class, 'searchByEmail']);
         Route::get('/', [UserController::class, 'userProfile'])->name('.profile');
@@ -39,5 +42,6 @@ Route::group(['prefix' => 'v1'], function () {
         Route::prefix('notification')->name('notification')->group(function () {
             // Route::get('/', [UserController::class, 'userNotification'])->name('.index');
         });
+    });
     });
 });
