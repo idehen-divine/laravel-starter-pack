@@ -350,8 +350,7 @@ class AuthController extends Controller
      * Resends a new OTP code to the user's email or phone number for verification purposes.
      *
      * @bodyParam email string required The email address to send the OTP to. Example: john.doe@example.com
-     * @bodyParam type string required The type of OTP verification. Must be one of: `RESET_PASSWORD_OTP`, `VERIFY_EMAIL_OTP`, `RESET_EMAIL_OTP`, `VERIFY_2FA_OTP`. Example: RESET_PASSWORD_OTP
-     *
+     * 
      * @responseField message string The status message of the operation
      * @responseField code integer The HTTP status code
      *
